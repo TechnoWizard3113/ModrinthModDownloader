@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modrinth Pack Updater & Exporter</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            modrinth: {
+              DEFAULT: '#1bd96a',
+              hover: '#15b858',
+              dark: '#111923',
+              card: '#18222d',
+              border: '#263545',
+              muted: '#8b9bb4'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- JSZip and FileSaver for bulk zip downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111923;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #263545;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #1bd96a;
+    }
+  </style>
+</head>
+<body class="bg-modrinth-dark text-slate-100 min-h-screen flex flex-col antialiased selection:bg-modrinth selection:text-black">
+
+  <!-- Header -->
+  <header class="border-b border-modrinth-border bg-modrinth-card/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="bg-modrinth/10 p-2 rounded-xl text-modrinth border border-modrinth/20">
+            <i data-lucide="box" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h1 class="font-bold text-lg leading-tight flex items-center gap-2">
+              Modrinth Pack Sync
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-modrinth/20 text-modrinth border border-modrinth/30">v2.0</span>
+            </h1>
+            <p class="text-xs text-modrinth-muted">Export & Update Mods across Minecraft versions</p>
+          </div>
+        </div>
+        <!-- Navigation Tabs -->
+        <div class="flex bg-modrinth-dark/80 p-1 rounded-xl border border-modrinth-border">
+          <button id="tab-export-btn" onclick="switchTab('export')" class="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold">
+            <i data-lucide="package-plus" class="w-4 h-4"></i>
+            <span>Build, Download & Export</span>
+          </button>
+          <button id="tab-import-btn" onclick="switchTab('import')" class="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all">
+            <i data-lucide="download-cloud" class="w-4 h-4"></i>
+            <span>Import & Update</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- TAB 1: BUILD, DOWNLOAD & EXPORT PACK -->
+    <div id="tab-export" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Search & Add Mods -->
+        <div class="lg:col-span-7 space-y-6">
+          <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+              <i data-lucide="search" class="w-5 h-5 text-modrinth"></i>
+              Search Modrinth
+            </h2>
+            <div class="flex flex-col sm:flex-row gap-2 mb-4">
+              <div class="relative flex-1">
+                <i data-lucide="search" class="w-5 h-5 absolute left-3.5 top-3 text-modrinth-muted"></i>
+                <input type="text" id="search-query" onkeydown="if(event.key==='Enter') searchMods()" placeholder="Search mods, plugins, datapacks..." class="w-full pl-10 pr-4 py-2.5 bg-modrinth-dark border border-modrinth-border rounded-xl focus:outline-none focus:border-modrinth text-sm transition" />
+              </div>
+              <button onclick="searchMods()" class="bg-modrinth hover:bg-modrinth-hover text-black font-semibold px-5 py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+                <span>Search</span>
+              </button>
+            </div>
+
+            <!-- Search Results Container -->
+            <div id="search-results" class="space-y-3 max-h-[480px] overflow-y-auto pr-1 min-h-[160px] flex flex-col justify-center">
+              <div class="text-center py-8 text-modrinth-muted text-sm">
+                <i data-lucide="sparkles" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                Search for mods or plugins above to build your pack list.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Current Pack List, Direct Download & Code Generator -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl flex flex-col h-full">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold flex items-center gap-2">
+                <i data-lucide="layers" class="w-5 h-5 text-modrinth"></i>
+                Selected Items (<span id="selected-count">0</span>)
+              </h2>
+              <button onclick="clearSelectedMods()" class="text-xs text-rose-400 hover:text-rose-300 font-medium flex items-center gap-1">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear All
+              </button>
+            </div>
+
+            <!-- Mod Loader & Target Version Defaults -->
+            <div class="grid grid-cols-2 gap-3 mb-4 p-3 bg-modrinth-dark/60 rounded-xl border border-modrinth-border">
+              <div>
+                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Loader</label>
+                <select id="export-loader" class="w-full bg-modrinth-card border border-modrinth-border rounded-lg text-xs p-2 focus:outline-none focus:border-modrinth">
+                  <option value="fabric">Fabric</option>
+                  <option value="forge">Forge</option>
+                  <option value="quilt">Quilt</option>
+                  <option value="neoforge">NeoForge</option>
+                  <option value="paper">Paper / Spigot</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Minecraft Version</label>
+                <select id="export-version" class="w-full bg-modrinth-card border border-modrinth-border rounded-lg text-xs p-2 focus:outline-none focus:border-modrinth">
+                  <!-- Populated dynamically with all MC versions -->
+                </select>
+              </div>
+            </div>
+
+            <!-- List of added mods -->
+            <div id="selected-mods-list" class="space-y-2 flex-1 max-h-[280px] overflow-y-auto mb-4 pr-1">
+              <div class="text-center py-8 text-modrinth-muted text-sm">
+                No items added yet. Click "+ Add" on search results.
+              </div>
+            </div>
+
+            <!-- Export Actions -->
+            <div class="border-t border-modrinth-border pt-4 mt-auto space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="downloadExportPackZip()" id="export-zip-btn" class="w-full bg-modrinth hover:bg-modrinth-hover text-black font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
+                  <i data-lucide="archive" class="w-4 h-4"></i>
+                  <span>Download ZIP</span>
+                </button>
+                <button onclick="downloadCodeFile()" class="w-full bg-modrinth-dark border border-modrinth-border hover:border-modrinth text-white font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                  <i data-lucide="file-text" class="w-4 h-4 text-modrinth"></i>
+                  <span>Save .TXT File</span>
+                </button>
+              </div>
+
+              <button onclick="generateExportCode()" class="w-full bg-modrinth-dark hover:bg-modrinth-border text-slate-200 border border-modrinth-border font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2">
+                <i data-lucide="code" class="w-4 h-4 text-modrinth"></i>
+                Generate Sharing Code
+              </button>
+
+              <div id="export-code-output" class="hidden space-y-2 pt-2">
+                <label class="block text-xs font-semibold text-modrinth-muted">Your Shareable Pack Code</label>
+                <div class="relative">
+                  <textarea id="export-code-text" readonly rows="3" class="w-full p-3 bg-modrinth-dark border border-modrinth-border rounded-xl text-xs font-mono focus:outline-none text-modrinth select-all leading-relaxed"></textarea>
+                  <button onclick="copyExportCode()" class="absolute top-2 right-2 bg-modrinth-card border border-modrinth-border hover:bg-modrinth-border text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: IMPORT & DOWNLOAD UPDATES -->
+    <div id="tab-import" class="hidden space-y-6">
+      <div class="max-w-4xl mx-auto space-y-6">
+
+        <!-- Step 1: Import Code or File -->
+        <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl space-y-4">
+          <div class="flex items-center justify-between border-b border-modrinth-border/60 pb-3">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-modrinth/20 text-modrinth text-xs flex items-center justify-center border border-modrinth/30 font-bold">1</span>
+              Import Modpack Code or File
+            </h2>
+            <div class="text-xs text-modrinth-muted">Paste code or upload list</div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-modrinth-muted mb-1">Paste Sharing Code or Name/ID List</label>
+              <textarea id="import-code-input" rows="3" placeholder="Paste your generated MCPACK code or format: name|id, name2|id2 or raw Modrinth slugs..." class="w-full p-3 bg-modrinth-dark border border-modrinth-border rounded-xl text-xs font-mono focus:outline-none focus:border-modrinth"></textarea>
+            </div>
+            <div class="flex flex-col justify-end">
+              <label class="block text-xs font-semibold text-modrinth-muted mb-1">Or Upload Pack File</label>
+              <label class="flex-1 border-2 border-dashed border-modrinth-border hover:border-modrinth/50 rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer transition bg-modrinth-dark/50">
+                <i data-lucide="upload-cloud" class="w-5 h-5 text-modrinth-muted mb-1"></i>
+                <span class="text-xs text-modrinth-muted font-medium">Choose file (.txt / .json)</span>
+                <input type="file" id="file-upload-input" accept=".txt,.json" class="hidden" onchange="handleFileUpload(event)" />
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 2: Target Version & Loader Selection -->
+          <div class="pt-4 border-t border-modrinth-border/60">
+            <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-modrinth/20 text-modrinth text-xs flex items-center justify-center border border-modrinth/30 font-bold">2</span>
+              Target Game Version & Loader
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Minecraft Version (v1.0+)</label>
+                <select id="import-version-select" class="w-full bg-modrinth-dark border border-modrinth-border rounded-xl text-xs p-2.5 focus:outline-none focus:border-modrinth">
+                  <!-- Dynamic Minecraft versions populated on initialization -->
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Mod Loader</label>
+                <select id="import-loader" class="w-full bg-modrinth-dark border border-modrinth-border rounded-xl text-xs p-2.5 focus:outline-none focus:border-modrinth">
+                  <option value="fabric">Fabric</option>
+                  <option value="forge">Forge</option>
+                  <option value="quilt">Quilt</option>
+                  <option value="neoforge">NeoForge</option>
+                  <option value="paper">Paper / Spigot</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="pt-2">
+            <button onclick="fetchImportedMods()" class="w-full bg-modrinth hover:bg-modrinth-hover text-black font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-modrinth/10">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+              Fetch Compatible Downloads
+            </button>
+          </div>
+        </div>
+
+        <!-- Download & Results Display Section -->
+        <div id="import-results-container" class="hidden bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-modrinth-border pb-4">
+            <div>
+              <h2 class="text-lg font-bold flex items-center gap-2">
+                <i data-lucide="check-circle" class="w-5 h-5 text-modrinth"></i>
+                Resolved Downloads
+              </h2>
+              <p class="text-xs text-modrinth-muted">Matched mods with target version and loader</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="downloadAllAsZip()" id="download-zip-btn" class="bg-modrinth hover:bg-modrinth-hover text-black text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+                <i data-lucide="archive" class="w-4 h-4"></i>
+                <span>Download All (.ZIP)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Resolution Summary Bar -->
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-modrinth-dark p-3 rounded-xl border border-modrinth-border">
+              <div id="stat-total" class="text-xl font-bold">0</div>
+              <div class="text-[10px] text-modrinth-muted uppercase tracking-wider font-semibold">Total Requested</div>
+            </div>
+            <div class="bg-modrinth-dark p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
+              <div id="stat-found" class="text-xl font-bold">0</div>
+              <div class="text-[10px] uppercase tracking-wider font-semibold">Ready to Download</div>
+            </div>
+            <div class="bg-modrinth-dark p-3 rounded-xl border border-rose-500/20 text-rose-400">
+              <div id="stat-missing" class="text-xl font-bold">0</div>
+              <div class="text-[10px] uppercase tracking-wider font-semibold">Unavailable</div>
+            </div>
+          </div>
+
+          <!-- List of resolved mod links -->
+          <div id="import-resolved-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+            <!-- Dynamic elements loaded here -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-modrinth-card border border-modrinth-border px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-5 pointer-events-none z-50">
+    <div id="toast-icon" class="text-modrinth">
+      <i data-lucide="info" class="w-5 h-5"></i>
+    </div>
+    <div id="toast-msg" class="text-xs font-medium">Notification</div>
+  </div>
+
+  <script>
+    // Global State
+    let selectedMods = [];
+    let importResolvedData = [];
+    let mcVersionsList = [];
+
+    // Fallback static list covering release 1.0 to recent snapshots
+    const DEFAULT_MC_VERSIONS = [
+      "1.21.4", "1.21.3", "1.21.1", "1.21", 
+      "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.20",
+      "1.19.4", "1.19.3", "1.19.2", "1.19.1", "1.19",
+      "1.18.2", "1.18.1", "1.18",
+      "1.17.1", "1.17",
+      "1.16.5", "1.16.4", "1.16.3", "1.16.2", "1.16.1", "1.16",
+      "1.15.2", "1.15.1", "1.15",
+      "1.14.4", "1.14.3", "1.14.2", "1.14.1", "1.14",
+      "1.13.2", "1.13.1", "1.13",
+      "1.12.2", "1.12.1", "1.12",
+      "1.11.2", "1.11",
+      "1.10.2", "1.10",
+      "1.9.4", "1.9",
+      "1.8.9", "1.8",
+      "1.7.10", "1.7.2",
+      "1.6.4", "1.6.2",
+      "1.5.2", "1.5.1",
+      "1.4.7", "1.4.2",
+      "1.3.2", "1.3.1",
+      "1.2.5", "1.2.1",
+      "1.1", "1.0"
+    ];
+
+    // Initialize Page
+    window.onload = async function() {
+      lucide.createIcons();
+      await populateMinecraftVersions();
+    };
+
+    // Fetch complete list of MC versions from Mojang Manifest API
+    async function populateMinecraftVersions() {
+      const exportSelect = document.getElementById('export-version');
+      const importSelect = document.getElementById('import-version-select');
+
+      try {
+        const res = await fetch('https://launchermeta.mojang.com/mc/game/version_manifest.json');
+        if (!res.ok) throw new Error('Failed manifest fetch');
+        const data = await res.json();
+        
+        // Extract release & snapshot versions from 1.0 upwards
+        mcVersionsList = data.versions
+          .map(v => v.id);
+      } catch (e) {
+        console.warn('Using default MC version list:', e);
+        mcVersionsList = DEFAULT_MC_VERSIONS;
+      }
+
+      // Populate select dropdowns
+      const optionsHtml = mcVersionsList.map(v => `<option value="${v}">${v}</option>`).join('');
+      exportSelect.innerHTML = optionsHtml;
+      importSelect.innerHTML = optionsHtml;
+
+      // Default selection
+      if (mcVersionsList.includes('1.20.4')) {
+        exportSelect.value = '1.20.4';
+        importSelect.value = '1.20.4';
+      }
+    }
+
+    // Tab Navigation Switcher
+    function switchTab(tab) {
+      const exportTab = document.getElementById('tab-export');
+      const importTab = document.getElementById('tab-import');
+      const exportBtn = document.getElementById('tab-export-btn');
+      const importBtn = document.getElementById('tab-import-btn');
+
+      if (tab === 'export') {
+        exportTab.classList.remove('hidden');
+        importTab.classList.add('hidden');
+        exportBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold";
+        importBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all";
+      } else {
+        exportTab.classList.add('hidden');
+        importTab.classList.remove('hidden');
+        importBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold";
+        exportBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all";
+      }
+    }
+
+    // Toast Notification System
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.textContent = message;
+      if (type === 'error') {
+        toastIcon.className = "text-rose-400";
+        toastIcon.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5"></i>`;
+      } else if (type === 'success') {
+        toastIcon.className = "text-modrinth";
+        toastIcon.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i>`;
+      } else {
+        toastIcon.className = "text-blue-400";
+        toastIcon.innerHTML = `<i data-lucide="info" class="w-5 h-5"></i>`;
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('opacity-0', 'translate-y-5', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-5', 'pointer-events-none');
+      }, 3500);
+    }
+
+    // --- TAB 1 LOGIC: SEARCH, DIRECT DOWNLOAD & EXPORT ---
+
+    // Search Modrinth API
+    async function searchMods() {
+      const query = document.getElementById('search-query').value.trim();
+      const resultsContainer = document.getElementById('search-results');
+
+      if (!query) {
+        showToast('Please enter a search query', 'error');
+        return;
+      }
+
+      resultsContainer.innerHTML = `
+        <div class="text-center py-8 text-modrinth-muted text-sm">
+          <div class="inline-block animate-spin mb-2"><i data-lucide="loader" class="w-6 h-6"></i></div>
+          <p>Searching Modrinth...</p>
+        </div>
+      `;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&limit=10`);
+        const data = await res.json();
+
+        if (!data.hits || data.hits.length === 0) {
+          resultsContainer.innerHTML = `<div class="text-center py-8 text-modrinth-muted text-sm">No results found for "${query}".</div>`;
+          return;
+        }
+
+        resultsContainer.innerHTML = data.hits.map(hit => {
+          const isSelected = selectedMods.some(m => m.id === hit.project_id || m.slug === hit.slug);
+          const iconUrl = hit.icon_url || 'https://placehold.co/64x64/18222d/8b9bb4?text=Mod';
+
+          return `
+            <div class="flex items-center justify-between p-3 bg-modrinth-dark/70 rounded-xl border border-modrinth-border hover:border-modrinth/40 transition">
+              <div class="flex items-center space-x-3 overflow-hidden">
+                <img src="${iconUrl}" onerror="this.src='https://placehold.co/64x64/18222d/8b9bb4?text=Mod'" class="w-10 h-10 rounded-lg object-cover bg-modrinth-card" alt="${hit.title}" />
+                <div class="truncate">
+                  <div class="font-bold text-sm truncate flex items-center gap-1.5">
+                    ${hit.title}
+                    <span class="text-[10px] text-modrinth-muted font-normal bg-modrinth-card px-1.5 py-0.5 rounded border border-modrinth-border">${hit.project_type}</span>
+                  </div>
+                  <div class="text-xs text-modrinth-muted truncate">${hit.description}</div>
+                </div>
+              </div>
+              <button onclick="addMod('${hit.project_id}', '${hit.slug}', \`${hit.title.replace(/'/g, "\\'")}\`, '${iconUrl}')" 
+                class="ml-3 shrink-0 ${isSelected ? 'bg-modrinth-border text-modrinth-muted cursor-not-allowed' : 'bg-modrinth/20 hover:bg-modrinth text-modrinth hover:text-black'} text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                <i data-lucide="${isSelected ? 'check' : 'plus'}" class="w-3.5 h-3.5"></i>
+                <span>${isSelected ? 'Added' : 'Add'}</span>
+              </button>
+            </div>
+          `;
+        }).join('');
+        lucide.createIcons();
+
+      } catch (err) {
+        console.error(err);
+        resultsContainer.innerHTML = `<div class="text-center py-8 text-rose-400 text-sm">Failed to search Modrinth. Try again.</div>`;
+      }
+    }
+
+    function addMod(id, slug, title, icon) {
+      if (selectedMods.some(m => m.id === id || m.slug === slug)) {
+        showToast('Mod is already in your selection list', 'info');
+        return;
+      }
+
+      selectedMods.push({ id, slug, title, icon });
+      updateSelectedModsUI();
+      if (document.getElementById('search-query').value.trim()) {
+        searchMods();
+      }
+      showToast(`Added ${title}`, 'success');
+    }
+
+    function removeMod(id) {
+      selectedMods = selectedMods.filter(m => m.id !== id);
+      updateSelectedModsUI();
+      if (document.getElementById('search-query').value.trim()) {
+        searchMods();
+      }
+    }
+
+    function clearSelectedMods() {
+      selectedMods = [];
+      updateSelectedModsUI();
+      document.getElementById('export-code-output').classList.add('hidden');
+    }
+
+    function updateSelectedModsUI() {
+      const container = document.getElementById('selected-mods-list');
+      const countLabel = document.getElementById('selected-count');
+      countLabel.textContent = selectedMods.length;
+
+      if (selectedMods.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-modrinth-muted text-sm">No items added yet. Search and add mods above.</div>`;
+        return;
+      }
+
+      container.innerHTML = selectedMods.map(m => `
+        <div class="flex items-center justify-between p-2.5 bg-modrinth-dark/90 rounded-xl border border-modrinth-border">
+          <div class="flex items-center space-x-2.5 truncate">
+            <img src="${m.icon}" onerror="this.src='https://placehold.co/64x64/18222d/8b9bb4?text=Mod'" class="w-7 h-7 rounded-md object-cover" />
+            <span class="text-xs font-semibold truncate">${m.title}</span>
+          </div>
+          <button onclick="removeMod('${m.id}')" class="text-modrinth-muted hover:text-rose-400 p-1 transition">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // Direct ZIP Download from Build & Export Tab
+    async function downloadExportPackZip() {
+      if (selectedMods.length === 0) {
+        showToast('Add mods to your list before downloading', 'error');
+        return;
+      }
+
+      const loader = document.getElementById('export-loader').value;
+      const targetVer = document.getElementById('export-version').value;
+      const zipBtn = document.getElementById('export-zip-btn');
+      
+      const originalText = zipBtn.innerHTML;
+      zipBtn.disabled = true;
+      zipBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Fetching...`;
+      lucide.createIcons();
+
+      try {
+        const zip = new JSZip();
+        let fetchedCount = 0;
+
+        for (const mod of selectedMods) {
+          try {
+            const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(mod.id)}/version?game_versions=[%22${encodeURIComponent(targetVer)}%22]&loaders=[%22${encodeURIComponent(loader)}%22]`;
+            const res = await fetch(url);
+            if (!res.ok) continue;
+
+            const versions = await res.json();
+            if (versions && versions.length > 0) {
+              const primaryFile = versions[0].files.find(f => f.primary) || versions[0].files[0];
+              const fileRes = await fetch(primaryFile.url);
+              const blob = await fileRes.blob();
+              zip.file(primaryFile.filename, blob);
+              fetchedCount++;
+            }
+          } catch(e) {
+            console.warn(`Could not fetch ${mod.title}`, e);
+          }
+        }
+
+        if (fetchedCount === 0) {
+          showToast(`No compatible files found for ${loader} on MC ${targetVer}`, 'error');
+          return;
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveAs(zipBlob, `modpack-${targetVer}-${loader}.zip`);
+        showToast(`Downloaded ${fetchedCount} mod(s) in ZIP archive!`, 'success');
+
+      } catch (err) {
+        console.error(err);
+        showToast('Error building download archive', 'error');
+      } finally {
+        zipBtn.disabled = false;
+        zipBtn.innerHTML = originalText;
+        lucide.createIcons();
+      }
+    }
+
+    // Export .TXT File
+    function downloadCodeFile() {
+      if (selectedMods.length === 0) {
+        showToast('Add mods before saving a pack file', 'error');
+        return;
+      }
+
+      const loader = document.getElementById('export-loader').value;
+      const targetVer = document.getElementById('export-version').value;
+      const codeString = buildPackCodeString(loader, targetVer);
+
+      const blob = new Blob([codeString], { type: "text/plain;charset=utf-8" });
+      saveAs(blob, `modpack-${targetVer}.txt`);
+      showToast('Pack .txt file saved!', 'success');
+    }
+
+    // Generate Shareable Code String Format
+    function buildPackCodeString(loader, targetVer) {
+      const modItems = selectedMods.map(m => `${m.title.replace(/[:|;]/g, '')}:${m.id}`).join(';');
+      return `MCPACK|${loader}|${targetVer}|${modItems}`;
+    }
+
+    function generateExportCode() {
+      if (selectedMods.length === 0) {
+        showToast('Add at least one mod before generating a code', 'error');
+        return;
+      }
+
+      const loader = document.getElementById('export-loader').value;
+      const targetVer = document.getElementById('export-version').value;
+      const codeString = buildPackCodeString(loader, targetVer);
+
+      const outputBox = document.getElementById('export-code-output');
+      const textArea = document.getElementById('export-code-text');
+
+      textArea.value = codeString;
+      outputBox.classList.remove('hidden');
+      showToast('Export code generated!', 'success');
+    }
+
+    function copyExportCode() {
+      const textArea = document.getElementById('export-code-text');
+      textArea.select();
+      document.execCommand('copy');
+      showToast('Copied code to clipboard!', 'success');
+    }
+
+    // --- TAB 2 LOGIC: IMPORT & DOWNLOAD ---
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('import-code-input').value = e.target.result.trim();
+        showToast(`Loaded ${file.name}`, 'success');
+      };
+      reader.readAsText(file);
+    }
+
+    async function fetchImportedMods() {
+      const codeInput = document.getElementById('import-code-input').value.trim();
+      const targetVer = document.getElementById('import-version-select').value;
+      const loader = document.getElementById('import-loader').value;
+
+      if (!codeInput) {
+        showToast('Please paste a code or upload a pack file', 'error');
+        return;
+      }
+
+      // Parse Code Input
+      let parsedMods = []; // Array of { id, name }
+
+      if (codeInput.startsWith('MCPACK|')) {
+        // Standard generated format
+        const parts = codeInput.split('|');
+        if (parts.length >= 4) {
+          const modStr = parts[3];
+          parsedMods = modStr.split(';').map(item => {
+            const [name, id] = item.split(':');
+            return { id: id || name, name: name || id };
+          }).filter(m => m.id);
+        }
+      } else {
+        // Fallback: Line-separated or comma-separated format (name|id or json)
+        try {
+          const json = JSON.parse(codeInput);
+          if (Array.isArray(json)) {
+            parsedMods = json.map(item => typeof item === 'string' ? { id: item, name: item } : { id: item.id || item.slug, name: item.name || item.id });
+          }
+        } catch(e) {
+          // Plain text comma/newline separation
+          const lines = codeInput.split(/[\n,;]+/);
+          parsedMods = lines.map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return null;
+            if (trimmed.includes('|')) {
+              const [name, id] = trimmed.split('|');
+              return { id: id.trim(), name: name.trim() };
+            }
+            return { id: trimmed, name: trimmed };
+          }).filter(Boolean);
+        }
+      }
+
+      if (parsedMods.length === 0) {
+        showToast('Could not parse any mod identifiers from input', 'error');
+        return;
+      }
+
+      const resultsContainer = document.getElementById('import-results-container');
+      const listContainer = document.getElementById('import-resolved-list');
+
+      resultsContainer.classList.remove('hidden');
+      listContainer.innerHTML = `
+        <div class="text-center py-12 text-modrinth-muted text-sm">
+          <div class="inline-block animate-spin mb-2 text-modrinth"><i data-lucide="loader-2" class="w-8 h-8"></i></div>
+          <p class="font-semibold">Resolving target version downloads from Modrinth REST API...</p>
+        </div>
+      `;
+      lucide.createIcons();
+
+      importResolvedData = [];
+      let foundCount = 0;
+      let missingCount = 0;
+
+      // Query Modrinth API for each mod's versions
+      for (const mod of parsedMods) {
+        try {
+          // Fetch version list for project ID or slug
+          const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(mod.id)}/version?game_versions=[%22${encodeURIComponent(targetVer)}%22]&loaders=[%22${encodeURIComponent(loader)}%22]`;
+          const res = await fetch(url);
+
+          if (!res.ok) throw new Error('Not found');
+
+          const versions = await res.json();
+
+          if (versions && versions.length > 0) {
+            // Pick the latest matching version file
+            const latestVer = versions[0];
+            const primaryFile = latestVer.files.find(f => f.primary) || latestVer.files[0];
+
+            importResolvedData.push({
+              id: mod.id,
+              name: mod.name,
+              status: 'found',
+              versionNumber: latestVer.version_number,
+              fileName: primaryFile.filename,
+              downloadUrl: primaryFile.url,
+              fileSize: (primaryFile.size / (1024 * 1024)).toFixed(2) + ' MB'
+            });
+            foundCount++;
+          } else {
+            importResolvedData.push({
+              id: mod.id,
+              name: mod.name,
+              status: 'missing',
+              reason: `No compatible ${loader} release found for MC ${targetVer}`
+            });
+            missingCount++;
+          }
+        } catch (err) {
+          importResolvedData.push({
+            id: mod.id,
+            name: mod.name,
+            status: 'missing',
+            reason: `Project not found or API error`
+          });
+          missingCount++;
+        }
+      }
+
+      // Render Statistics
+      document.getElementById('stat-total').textContent = parsedMods.length;
+      document.getElementById('stat-found').textContent = foundCount;
+      document.getElementById('stat-missing').textContent = missingCount;
+
+      // Render List Results
+      listContainer.innerHTML = importResolvedData.map(item => {
+        if (item.status === 'found') {
+          return `
+            <div class="flex items-center justify-between p-3 bg-modrinth-dark/80 rounded-xl border border-emerald-500/20 hover:border-emerald-500/40 transition">
+              <div class="flex items-center space-x-3 truncate">
+                <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <i data-lucide="check" class="w-4 h-4"></i>
+                </div>
+                <div class="truncate">
+                  <div class="font-bold text-sm truncate flex items-center gap-2">
+                    ${item.name}
+                    <span class="text-[10px] text-modrinth-muted font-normal bg-modrinth-card px-1.5 py-0.5 rounded border border-modrinth-border">${item.versionNumber}</span>
+                  </div>
+                  <div class="text-xs text-modrinth-muted font-mono truncate">${item.fileName} (${item.fileSize})</div>
+                </div>
+              </div>
+              <a href="${item.downloadUrl}" target="_blank" download class="ml-3 shrink-0 bg-modrinth hover:bg-modrinth-hover text-black font-semibold text-xs px-3.5 py-2 rounded-lg transition flex items-center gap-1.5">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Download</span>
+              </a>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="flex items-center justify-between p-3 bg-modrinth-dark/40 rounded-xl border border-rose-500/20 opacity-75">
+              <div class="flex items-center space-x-3 truncate">
+                <div class="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
+                  <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                </div>
+                <div class="truncate">
+                  <div class="font-bold text-sm text-slate-300 truncate">${item.name}</div>
+                  <div class="text-xs text-rose-400 truncate">${item.reason}</div>
+                </div>
+              </div>
+              <span class="text-xs text-modrinth-muted bg-modrinth-card px-2.5 py-1 rounded-lg border border-modrinth-border shrink-0">Unavailable</span>
+            </div>
+          `;
+        }
+      }).join('');
+
+      lucide.createIcons();
+      showToast(`Resolved ${foundCount} of ${parsedMods.length} mods for MC ${targetVer}!`, 'success');
+    }
+
+    // Download resolved mods directly into a single zip archive
+    async function downloadAllAsZip() {
+      const readyMods = importResolvedData.filter(m => m.status === 'found');
+      if (readyMods.length === 0) {
+        showToast('No downloadable mods found for this version', 'error');
+        return;
+      }
+
+      const zipBtn = document.getElementById('download-zip-btn');
+      const originalBtnText = zipBtn.innerHTML;
+      zipBtn.disabled = true;
+      zipBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Zipping...`;
+      lucide.createIcons();
+
+      try {
+        const zip = new JSZip();
+        const targetVer = document.getElementById('import-version-select').value || 'mods';
+
+        showToast(`Preparing ${readyMods.length} mod files for ZIP download...`, 'info');
+
+        for (let i = 0; i < readyMods.length; i++) {
+          const mod = readyMods[i];
+          const response = await fetch(mod.downloadUrl);
+          const blob = await response.blob();
+          zip.file(mod.fileName, blob);
+        }
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, `modpack-${targetVer}.zip`);
+        showToast('ZIP Download started!', 'success');
+
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to generate ZIP file', 'error');
+      } finally {
+        zipBtn.disabled = false;
+        zipBtn.innerHTML = originalBtnText;
+        lucide.createIcons();
+      }
+    }
+  </script>
+</body>
+</html>
