@@ -1,321 +1,226 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modrinth Pack Updater & Exporter</title>
-  <!-- Tailwind CSS via CDN -->
+  <title>Minecraft Modpack Manager & Updater</title>
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            modrinth: {
-              DEFAULT: '#1bd96a',
-              hover: '#15b858',
-              dark: '#111923',
-              card: '#18222d',
-              border: '#263545',
-              muted: '#8b9bb4'
-            }
-          }
-        }
-      }
-    }
-  </script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- JSZip and FileSaver for bulk zip downloads -->
+  <!-- JSZip for batch downloading -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body {
-      font-family: 'Inter', sans-serif;
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
     }
-    /* Custom Scrollbars */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #1f2937;
     }
-    ::-webkit-scrollbar-track {
-      background: #111923;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #263545;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #1bd96a;
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
     }
   </style>
 </head>
-<body class="bg-modrinth-dark text-slate-100 min-h-screen flex flex-col antialiased selection:bg-modrinth selection:text-black">
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans">
 
   <!-- Header -->
-  <header class="border-b border-modrinth-border bg-modrinth-card/80 backdrop-blur sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        <div class="flex items-center space-x-3">
-          <div class="bg-modrinth/10 p-2 rounded-xl text-modrinth border border-modrinth/20">
-            <i data-lucide="box" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <h1 class="font-bold text-lg leading-tight flex items-center gap-2">
-              Modrinth Pack Sync
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-modrinth/20 text-modrinth border border-modrinth/30">v2.0</span>
-            </h1>
-            <p class="text-xs text-modrinth-muted">Export & Update Mods across Minecraft versions</p>
-          </div>
-        </div>
-        <!-- Navigation Tabs -->
-        <div class="flex bg-modrinth-dark/80 p-1 rounded-xl border border-modrinth-border">
-          <button id="tab-export-btn" onclick="switchTab('export')" class="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold">
-            <i data-lucide="package-plus" class="w-4 h-4"></i>
-            <span>Build, Download & Export</span>
-          </button>
-          <button id="tab-import-btn" onclick="switchTab('import')" class="flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all">
-            <i data-lucide="download-cloud" class="w-4 h-4"></i>
-            <span>Import & Update</span>
-          </button>
-        </div>
+  <header class="bg-gray-900 border-b border-gray-800 p-4 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <i data-lucide="box" class="w-8 h-8 text-emerald-500"></i>
+        <h1 class="text-xl font-bold tracking-wide">ModManager <span class="text-xs px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded">v1.0</span></h1>
       </div>
+      
+      <!-- Tab Navigation -->
+      <nav class="flex space-x-2 bg-gray-950 p-1 rounded-lg border border-gray-800">
+        <button id="tab-build-btn" onclick="switchTab('build')" class="px-4 py-2 text-sm font-medium rounded-md transition-all bg-emerald-600 text-white flex items-center space-x-2">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Build & Export</span>
+        </button>
+        <button id="tab-import-btn" onclick="switchTab('import')" class="px-4 py-2 text-sm font-medium rounded-md transition-all text-gray-400 hover:text-gray-200 flex items-center space-x-2">
+          <i data-lucide="download-cloud" class="w-4 h-4"></i>
+          <span>Import & Update</span>
+        </button>
+      </nav>
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-    <!-- TAB 1: BUILD, DOWNLOAD & EXPORT PACK -->
-    <div id="tab-export" class="space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        <!-- Left Column: Search & Add Mods -->
-        <div class="lg:col-span-7 space-y-6">
-          <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-              <i data-lucide="search" class="w-5 h-5 text-modrinth"></i>
-              Search Modrinth
+  <!-- Main Content -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6">
+    
+    <!-- TAB 1: BUILD & EXPORT -->
+    <section id="tab-build" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Search & Add -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+            <h2 class="text-lg font-semibold flex items-center space-x-2">
+              <i data-lucide="search" class="w-5 h-5 text-emerald-400"></i>
+              <span>Search Modrinth</span>
             </h2>
-            <div class="flex flex-col sm:flex-row gap-2 mb-4">
-              <div class="relative flex-1">
-                <i data-lucide="search" class="w-5 h-5 absolute left-3.5 top-3 text-modrinth-muted"></i>
-                <input type="text" id="search-query" onkeydown="if(event.key==='Enter') searchMods()" placeholder="Search mods, plugins, datapacks..." class="w-full pl-10 pr-4 py-2.5 bg-modrinth-dark border border-modrinth-border rounded-xl focus:outline-none focus:border-modrinth text-sm transition" />
-              </div>
-              <button onclick="searchMods()" class="bg-modrinth hover:bg-modrinth-hover text-black font-semibold px-5 py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 shrink-0">
+            
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input type="text" id="search-input" placeholder="Search mods or plugins..." onkeydown="if(event.key==='Enter') searchMods()" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500 text-sm">
+              <button onclick="searchMods()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-5 py-2 rounded-lg text-sm transition flex items-center justify-center space-x-2">
                 <span>Search</span>
               </button>
             </div>
 
-            <!-- Search Results Container -->
-            <div id="search-results" class="space-y-3 max-h-[480px] overflow-y-auto pr-1 min-h-[160px] flex flex-col justify-center">
-              <div class="text-center py-8 text-modrinth-muted text-sm">
-                <i data-lucide="sparkles" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                Search for mods or plugins above to build your pack list.
-              </div>
+            <!-- Search Results -->
+            <div id="search-results" class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+              <p class="text-xs text-gray-500 text-center py-6">Search for mods to build your list.</p>
             </div>
           </div>
         </div>
 
-        <!-- Right Column: Current Pack List, Direct Download & Code Generator -->
-        <div class="lg:col-span-5 space-y-6">
-          <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl flex flex-col h-full">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold flex items-center gap-2">
-                <i data-lucide="layers" class="w-5 h-5 text-modrinth"></i>
-                Selected Items (<span id="selected-count">0</span>)
-              </h2>
-              <button onclick="clearSelectedMods()" class="text-xs text-rose-400 hover:text-rose-300 font-medium flex items-center gap-1">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear All
-              </button>
-            </div>
-
-            <!-- Mod Loader & Target Version Defaults -->
-            <div class="grid grid-cols-2 gap-3 mb-4 p-3 bg-modrinth-dark/60 rounded-xl border border-modrinth-border">
-              <div>
-                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Loader</label>
-                <select id="export-loader" class="w-full bg-modrinth-card border border-modrinth-border rounded-lg text-xs p-2 focus:outline-none focus:border-modrinth">
-                  <option value="fabric">Fabric</option>
-                  <option value="forge">Forge</option>
-                  <option value="quilt">Quilt</option>
-                  <option value="neoforge">NeoForge</option>
-                  <option value="paper">Paper / Spigot</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Minecraft Version</label>
-                <select id="export-version" class="w-full bg-modrinth-card border border-modrinth-border rounded-lg text-xs p-2 focus:outline-none focus:border-modrinth">
-                  <!-- Populated dynamically with all MC versions -->
-                </select>
-              </div>
-            </div>
-
-            <!-- List of added mods -->
-            <div id="selected-mods-list" class="space-y-2 flex-1 max-h-[280px] overflow-y-auto mb-4 pr-1">
-              <div class="text-center py-8 text-modrinth-muted text-sm">
-                No items added yet. Click "+ Add" on search results.
-              </div>
-            </div>
-
-            <!-- Export Actions -->
-            <div class="border-t border-modrinth-border pt-4 mt-auto space-y-2">
-              <div class="grid grid-cols-2 gap-2">
-                <button onclick="downloadExportPackZip()" id="export-zip-btn" class="w-full bg-modrinth hover:bg-modrinth-hover text-black font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
-                  <i data-lucide="archive" class="w-4 h-4"></i>
-                  <span>Download ZIP</span>
-                </button>
-                <button onclick="downloadCodeFile()" class="w-full bg-modrinth-dark border border-modrinth-border hover:border-modrinth text-white font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
-                  <i data-lucide="file-text" class="w-4 h-4 text-modrinth"></i>
-                  <span>Save .TXT File</span>
-                </button>
-              </div>
-
-              <button onclick="generateExportCode()" class="w-full bg-modrinth-dark hover:bg-modrinth-border text-slate-200 border border-modrinth-border font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2">
-                <i data-lucide="code" class="w-4 h-4 text-modrinth"></i>
-                Generate Sharing Code
-              </button>
-
-              <div id="export-code-output" class="hidden space-y-2 pt-2">
-                <label class="block text-xs font-semibold text-modrinth-muted">Your Shareable Pack Code</label>
-                <div class="relative">
-                  <textarea id="export-code-text" readonly rows="3" class="w-full p-3 bg-modrinth-dark border border-modrinth-border rounded-xl text-xs font-mono focus:outline-none text-modrinth select-all leading-relaxed"></textarea>
-                  <button onclick="copyExportCode()" class="absolute top-2 right-2 bg-modrinth-card border border-modrinth-border hover:bg-modrinth-border text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1">
-                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: IMPORT & DOWNLOAD UPDATES -->
-    <div id="tab-import" class="hidden space-y-6">
-      <div class="max-w-4xl mx-auto space-y-6">
-
-        <!-- Step 1: Import Code or File -->
-        <div class="bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl space-y-4">
-          <div class="flex items-center justify-between border-b border-modrinth-border/60 pb-3">
-            <h2 class="text-lg font-bold flex items-center gap-2">
-              <span class="w-6 h-6 rounded-full bg-modrinth/20 text-modrinth text-xs flex items-center justify-center border border-modrinth/30 font-bold">1</span>
-              Import Modpack Code or File
+        <!-- Right Column: Pack Config & Export -->
+        <div class="space-y-4">
+          <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+            <h2 class="text-lg font-semibold flex items-center space-x-2">
+              <i data-lucide="layers" class="w-5 h-5 text-emerald-400"></i>
+              <span>Your Collection</span>
             </h2>
-            <div class="text-xs text-modrinth-muted">Paste code or upload list</div>
-          </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="md:col-span-2">
-              <label class="block text-xs font-semibold text-modrinth-muted mb-1">Paste Sharing Code or Name/ID List</label>
-              <textarea id="import-code-input" rows="3" placeholder="Paste your generated MCPACK code or format: name|id, name2|id2 or raw Modrinth slugs..." class="w-full p-3 bg-modrinth-dark border border-modrinth-border rounded-xl text-xs font-mono focus:outline-none focus:border-modrinth"></textarea>
-            </div>
-            <div class="flex flex-col justify-end">
-              <label class="block text-xs font-semibold text-modrinth-muted mb-1">Or Upload Pack File</label>
-              <label class="flex-1 border-2 border-dashed border-modrinth-border hover:border-modrinth/50 rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer transition bg-modrinth-dark/50">
-                <i data-lucide="upload-cloud" class="w-5 h-5 text-modrinth-muted mb-1"></i>
-                <span class="text-xs text-modrinth-muted font-medium">Choose file (.txt / .json)</span>
-                <input type="file" id="file-upload-input" accept=".txt,.json" class="hidden" onchange="handleFileUpload(event)" />
-              </label>
-            </div>
-          </div>
-
-          <!-- Step 2: Target Version & Loader Selection -->
-          <div class="pt-4 border-t border-modrinth-border/60">
-            <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-              <span class="w-6 h-6 rounded-full bg-modrinth/20 text-modrinth text-xs flex items-center justify-center border border-modrinth/30 font-bold">2</span>
-              Target Game Version & Loader
-            </h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-3 text-sm">
               <div>
-                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Minecraft Version (v1.0+)</label>
-                <select id="import-version-select" class="w-full bg-modrinth-dark border border-modrinth-border rounded-xl text-xs p-2.5 focus:outline-none focus:border-modrinth">
-                  <!-- Dynamic Minecraft versions populated on initialization -->
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-modrinth-muted mb-1">Target Mod Loader</label>
-                <select id="import-loader" class="w-full bg-modrinth-dark border border-modrinth-border rounded-xl text-xs p-2.5 focus:outline-none focus:border-modrinth">
+                <label class="block text-xs font-medium text-gray-400 mb-1">Target Loader</label>
+                <select id="export-loader" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-sm focus:outline-none focus:border-emerald-500">
                   <option value="fabric">Fabric</option>
                   <option value="forge">Forge</option>
-                  <option value="quilt">Quilt</option>
                   <option value="neoforge">NeoForge</option>
                   <option value="paper">Paper / Spigot</option>
+                  <option value="quilt">Quilt</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1">Target Minecraft Version</label>
+                <select id="export-version" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-sm focus:outline-none focus:border-emerald-500">
+                  <!-- Populated by JS -->
                 </select>
               </div>
             </div>
-          </div>
 
-          <!-- Submit Button -->
-          <div class="pt-2">
-            <button onclick="fetchImportedMods()" class="w-full bg-modrinth hover:bg-modrinth-hover text-black font-semibold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-modrinth/10">
-              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-              Fetch Compatible Downloads
+            <hr class="border-gray-800">
+
+            <!-- Selected Mods List -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Added Mods (<span id="pack-count">0</span>)</span>
+                <button onclick="clearCollection()" class="text-xs text-red-400 hover:text-red-300">Clear All</button>
+              </div>
+              <div id="selected-mods-list" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                <p class="text-xs text-gray-500 text-center py-4">No mods added yet.</p>
+              </div>
+            </div>
+
+            <!-- Export Code Output -->
+            <div class="space-y-2">
+              <label class="block text-xs font-medium text-gray-400">Generated Share Code</label>
+              <textarea id="export-code-output" readonly rows="3" placeholder="Add mods to generate share code..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs font-mono text-gray-300 resize-none focus:outline-none"></textarea>
+            </div>
+
+            <!-- Download / Save Actions -->
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="copyShareCode()" class="bg-gray-800 hover:bg-gray-700 text-xs font-medium py-2 rounded-lg transition flex items-center justify-center space-x-1">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copy Code</span>
+              </button>
+              <button onclick="saveAsTextFile()" class="bg-gray-800 hover:bg-gray-700 text-xs font-medium py-2 rounded-lg transition flex items-center justify-center space-x-1">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                <span>Save .TXT</span>
+              </button>
+            </div>
+
+            <button onclick="downloadDirectFromBuild()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center space-x-2">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Download ZIP Directly</span>
             </button>
           </div>
         </div>
 
-        <!-- Download & Results Display Section -->
-        <div id="import-results-container" class="hidden bg-modrinth-card rounded-2xl p-6 border border-modrinth-border shadow-xl space-y-4">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-modrinth-border pb-4">
+      </div>
+    </section>
+
+    <!-- TAB 2: IMPORT & UPDATE -->
+    <section id="tab-import" class="hidden space-y-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-6">
+        <h2 class="text-lg font-semibold flex items-center space-x-2">
+          <i data-lucide="upload-cloud" class="w-5 h-5 text-emerald-400"></i>
+          <span>Import Code & Fetch Downloads</span>
+        </h2>
+
+        <!-- Import Form -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="md:col-span-2 space-y-2">
+            <label class="block text-xs font-medium text-gray-400">Paste Code or Drop Text File</label>
+            <textarea id="import-input" rows="4" placeholder="Paste formatted code or contents of share file..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs font-mono focus:outline-none focus:border-emerald-500"></textarea>
+            <input type="file" id="file-upload" accept=".txt,.json" onchange="handleFileUpload(event)" class="text-xs text-gray-400">
+          </div>
+
+          <div class="space-y-4 bg-gray-950 p-4 border border-gray-800 rounded-lg">
+            <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider">New Target Settings</h3>
+            
             <div>
-              <h2 class="text-lg font-bold flex items-center gap-2">
-                <i data-lucide="check-circle" class="w-5 h-5 text-modrinth"></i>
-                Resolved Downloads
-              </h2>
-              <p class="text-xs text-modrinth-muted">Matched mods with target version and loader</p>
+              <label class="block text-xs font-medium text-gray-400 mb-1">Target Loader</label>
+              <select id="import-loader" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-sm focus:outline-none focus:border-emerald-500">
+                <option value="fabric">Fabric</option>
+                <option value="forge">Forge</option>
+                <option value="neoforge">NeoForge</option>
+                <option value="paper">Paper / Spigot</option>
+                <option value="quilt">Quilt</option>
+              </select>
             </div>
-            <div class="flex gap-2">
-              <button onclick="downloadAllAsZip()" id="download-zip-btn" class="bg-modrinth hover:bg-modrinth-hover text-black text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
-                <i data-lucide="archive" class="w-4 h-4"></i>
-                <span>Download All (.ZIP)</span>
-              </button>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1">Target Version</label>
+              <select id="import-version-select" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-sm focus:outline-none focus:border-emerald-500">
+                <!-- Populated by JS -->
+              </select>
             </div>
+
+            <button onclick="processImportAndResolve()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg text-sm transition flex items-center justify-center space-x-2">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+              <span>Resolve & Fetch Mods</span>
+            </button>
+          </div>
+        </div>
+
+        <hr class="border-gray-800">
+
+        <!-- Download List Results -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-gray-200">Resolved Downloads</h3>
+            <button id="zip-all-btn" onclick="downloadAllAsZip()" disabled class="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition flex items-center space-x-2">
+              <i data-lucide="archive" class="w-4 h-4"></i>
+              <span>Download All (.ZIP)</span>
+            </button>
           </div>
 
-          <!-- Resolution Summary Bar -->
-          <div class="grid grid-cols-3 gap-3 text-center">
-            <div class="bg-modrinth-dark p-3 rounded-xl border border-modrinth-border">
-              <div id="stat-total" class="text-xl font-bold">0</div>
-              <div class="text-[10px] text-modrinth-muted uppercase tracking-wider font-semibold">Total Requested</div>
-            </div>
-            <div class="bg-modrinth-dark p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
-              <div id="stat-found" class="text-xl font-bold">0</div>
-              <div class="text-[10px] uppercase tracking-wider font-semibold">Ready to Download</div>
-            </div>
-            <div class="bg-modrinth-dark p-3 rounded-xl border border-rose-500/20 text-rose-400">
-              <div id="stat-missing" class="text-xl font-bold">0</div>
-              <div class="text-[10px] uppercase tracking-wider font-semibold">Unavailable</div>
-            </div>
-          </div>
-
-          <!-- List of resolved mod links -->
-          <div id="import-resolved-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-            <!-- Dynamic elements loaded here -->
+          <div id="resolved-list" class="space-y-2">
+            <p class="text-xs text-gray-500 text-center py-6">Import a code above to resolve file links.</p>
           </div>
         </div>
 
       </div>
-    </div>
+    </section>
 
   </main>
 
-  <!-- Notification Toast -->
-  <div id="toast" class="fixed bottom-5 right-5 bg-modrinth-card border border-modrinth-border px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-5 pointer-events-none z-50">
-    <div id="toast-icon" class="text-modrinth">
-      <i data-lucide="info" class="w-5 h-5"></i>
-    </div>
-    <div id="toast-msg" class="text-xs font-medium">Notification</div>
-  </div>
-
   <script>
-    // Global State
+    // Header required by Modrinth API guidelines to prevent request blocking on hosted domains
+    const API_HEADERS = {
+      'User-Agent': 'MyModpackDownloader/1.0.0 (https://github.com)'
+    };
+
     let selectedMods = [];
-    let importResolvedData = [];
+    let resolvedDownloads = [];
     let mcVersionsList = [];
 
-    // Fallback static list covering release 1.0 to recent snapshots
     const DEFAULT_MC_VERSIONS = [
       "26.3",
       "26.2", "26.2.1",
@@ -379,484 +284,295 @@
       }
     }
 
-    // Tab Navigation Switcher
+    // Switch Navigation Tabs
     function switchTab(tab) {
-      const exportTab = document.getElementById('tab-export');
+      const buildTab = document.getElementById('tab-build');
       const importTab = document.getElementById('tab-import');
-      const exportBtn = document.getElementById('tab-export-btn');
+      const buildBtn = document.getElementById('tab-build-btn');
       const importBtn = document.getElementById('tab-import-btn');
 
-      if (tab === 'export') {
-        exportTab.classList.remove('hidden');
+      if (tab === 'build') {
+        buildTab.classList.remove('hidden');
         importTab.classList.add('hidden');
-        exportBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold";
-        importBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all";
+        buildBtn.className = "px-4 py-2 text-sm font-medium rounded-md transition-all bg-emerald-600 text-white flex items-center space-x-2";
+        importBtn.className = "px-4 py-2 text-sm font-medium rounded-md transition-all text-gray-400 hover:text-gray-200 flex items-center space-x-2";
       } else {
-        exportTab.classList.add('hidden');
         importTab.classList.remove('hidden');
-        importBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-all bg-modrinth text-black shadow-md font-semibold";
-        exportBtn.className = "flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg text-modrinth-muted hover:text-white transition-all";
+        buildTab.classList.add('hidden');
+        importBtn.className = "px-4 py-2 text-sm font-medium rounded-md transition-all bg-emerald-600 text-white flex items-center space-x-2";
+        buildBtn.className = "px-4 py-2 text-sm font-medium rounded-md transition-all text-gray-400 hover:text-gray-200 flex items-center space-x-2";
       }
     }
 
-    // Toast Notification System
-    function showToast(message, type = 'info') {
-      const toast = document.getElementById('toast');
-      const toastMsg = document.getElementById('toast-msg');
-      const toastIcon = document.getElementById('toast-icon');
-
-      toastMsg.textContent = message;
-      if (type === 'error') {
-        toastIcon.className = "text-rose-400";
-        toastIcon.innerHTML = `<i data-lucide="alert-circle" class="w-5 h-5"></i>`;
-      } else if (type === 'success') {
-        toastIcon.className = "text-modrinth";
-        toastIcon.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i>`;
-      } else {
-        toastIcon.className = "text-blue-400";
-        toastIcon.innerHTML = `<i data-lucide="info" class="w-5 h-5"></i>`;
-      }
-      lucide.createIcons();
-
-      toast.classList.remove('opacity-0', 'translate-y-5', 'pointer-events-none');
-      setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-5', 'pointer-events-none');
-      }, 3500);
-    }
-
-    // --- TAB 1 LOGIC: SEARCH, DIRECT DOWNLOAD & EXPORT ---
-
-    // Search Modrinth API
+    // Search Modrinth REST API
     async function searchMods() {
-      const query = document.getElementById('search-query').value.trim();
+      const query = document.getElementById('search-input').value.trim();
       const resultsContainer = document.getElementById('search-results');
+      if (!query) return;
 
-      if (!query) {
-        showToast('Please enter a search query', 'error');
-        return;
-      }
-
-      resultsContainer.innerHTML = `
-        <div class="text-center py-8 text-modrinth-muted text-sm">
-          <div class="inline-block animate-spin mb-2"><i data-lucide="loader" class="w-6 h-6"></i></div>
-          <p>Searching Modrinth...</p>
-        </div>
-      `;
-      lucide.createIcons();
+      resultsContainer.innerHTML = `<p class="text-xs text-gray-400 text-center py-6">Searching Modrinth...</p>`;
 
       try {
-        const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&limit=10`);
+        const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&limit=10`, {
+          headers: API_HEADERS
+        });
+        if (!res.ok) throw new Error('Search request failed');
         const data = await res.json();
 
-        if (!data.hits || data.hits.length === 0) {
-          resultsContainer.innerHTML = `<div class="text-center py-8 text-modrinth-muted text-sm">No results found for "${query}".</div>`;
+        if (data.hits.length === 0) {
+          resultsContainer.innerHTML = `<p class="text-xs text-gray-500 text-center py-6">No mods found matching "${query}".</p>`;
           return;
         }
 
-        resultsContainer.innerHTML = data.hits.map(hit => {
-          const isSelected = selectedMods.some(m => m.id === hit.project_id || m.slug === hit.slug);
-          const iconUrl = hit.icon_url || 'https://placehold.co/64x64/18222d/8b9bb4?text=Mod';
-
-          return `
-            <div class="flex items-center justify-between p-3 bg-modrinth-dark/70 rounded-xl border border-modrinth-border hover:border-modrinth/40 transition">
-              <div class="flex items-center space-x-3 overflow-hidden">
-                <img src="${iconUrl}" onerror="this.src='https://placehold.co/64x64/18222d/8b9bb4?text=Mod'" class="w-10 h-10 rounded-lg object-cover bg-modrinth-card" alt="${hit.title}" />
-                <div class="truncate">
-                  <div class="font-bold text-sm truncate flex items-center gap-1.5">
-                    ${hit.title}
-                    <span class="text-[10px] text-modrinth-muted font-normal bg-modrinth-card px-1.5 py-0.5 rounded border border-modrinth-border">${hit.project_type}</span>
-                  </div>
-                  <div class="text-xs text-modrinth-muted truncate">${hit.description}</div>
-                </div>
+        resultsContainer.innerHTML = data.hits.map(mod => `
+          <div class="bg-gray-950 border border-gray-800 p-3 rounded-lg flex items-center justify-between">
+            <div class="flex items-center space-x-3 overflow-hidden">
+              <img src="${mod.icon_url || 'https://cdn.modrinth.com/placeholder.svg'}" class="w-9 h-9 rounded bg-gray-900 object-cover shrink-0" alt="">
+              <div class="truncate">
+                <h4 class="text-sm font-medium text-gray-200 truncate">${mod.title}</h4>
+                <p class="text-xs text-gray-500 truncate">${mod.description || 'No description'}</p>
               </div>
-              <button onclick="addMod('${hit.project_id}', '${hit.slug}', \`${hit.title.replace(/'/g, "\\'")}\`, '${iconUrl}')" 
-                class="ml-3 shrink-0 ${isSelected ? 'bg-modrinth-border text-modrinth-muted cursor-not-allowed' : 'bg-modrinth/20 hover:bg-modrinth text-modrinth hover:text-black'} text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                <i data-lucide="${isSelected ? 'check' : 'plus'}" class="w-3.5 h-3.5"></i>
-                <span>${isSelected ? 'Added' : 'Add'}</span>
-              </button>
             </div>
-          `;
-        }).join('');
-        lucide.createIcons();
+            <button onclick="addMod('${mod.project_id}', '${escapeHtml(mod.title)}')" class="bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-600/40 text-emerald-400 hover:text-white text-xs px-3 py-1.5 rounded transition shrink-0 ml-2">
+              + Add
+            </button>
+          </div>
+        `).join('');
 
-      } catch (err) {
-        console.error(err);
-        resultsContainer.innerHTML = `<div class="text-center py-8 text-rose-400 text-sm">Failed to search Modrinth. Try again.</div>`;
+      } catch (e) {
+        resultsContainer.innerHTML = `<p class="text-xs text-red-400 text-center py-6">Failed to search Modrinth. Check connection or try again.</p>`;
       }
     }
 
-    function addMod(id, slug, title, icon) {
-      if (selectedMods.some(m => m.id === id || m.slug === slug)) {
-        showToast('Mod is already in your selection list', 'info');
-        return;
-      }
+    // Escape special characters in strings
+    function escapeHtml(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
 
-      selectedMods.push({ id, slug, title, icon });
+    // Add Mod to Pack
+    function addMod(id, title) {
+      if (selectedMods.some(m => m.id === id)) return;
+      selectedMods.push({ id, title });
       updateSelectedModsUI();
-      if (document.getElementById('search-query').value.trim()) {
-        searchMods();
-      }
-      showToast(`Added ${title}`, 'success');
     }
 
+    // Remove Mod from Pack
     function removeMod(id) {
       selectedMods = selectedMods.filter(m => m.id !== id);
       updateSelectedModsUI();
-      if (document.getElementById('search-query').value.trim()) {
-        searchMods();
-      }
     }
 
-    function clearSelectedMods() {
+    // Clear Collection
+    function clearCollection() {
       selectedMods = [];
       updateSelectedModsUI();
-      document.getElementById('export-code-output').classList.add('hidden');
     }
 
+    // Update UI & Share Code Format
     function updateSelectedModsUI() {
-      const container = document.getElementById('selected-mods-list');
-      const countLabel = document.getElementById('selected-count');
-      countLabel.textContent = selectedMods.length;
+      const list = document.getElementById('selected-mods-list');
+      const count = document.getElementById('pack-count');
+      const output = document.getElementById('export-code-output');
+
+      count.textContent = selectedMods.length;
 
       if (selectedMods.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-modrinth-muted text-sm">No items added yet. Search and add mods above.</div>`;
+        list.innerHTML = `<p class="text-xs text-gray-500 text-center py-4">No mods added yet.</p>`;
+        output.value = '';
         return;
       }
 
-      container.innerHTML = selectedMods.map(m => `
-        <div class="flex items-center justify-between p-2.5 bg-modrinth-dark/90 rounded-xl border border-modrinth-border">
-          <div class="flex items-center space-x-2.5 truncate">
-            <img src="${m.icon}" onerror="this.src='https://placehold.co/64x64/18222d/8b9bb4?text=Mod'" class="w-7 h-7 rounded-md object-cover" />
-            <span class="text-xs font-semibold truncate">${m.title}</span>
-          </div>
-          <button onclick="removeMod('${m.id}')" class="text-modrinth-muted hover:text-rose-400 p-1 transition">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
+      list.innerHTML = selectedMods.map(m => `
+        <div class="flex justify-between items-center bg-gray-950 p-2 border border-gray-800 rounded text-xs">
+          <span class="truncate font-medium text-gray-300">${m.title}</span>
+          <button onclick="removeMod('${m.id}')" class="text-red-400 hover:text-red-300 px-1">✕</button>
         </div>
       `).join('');
-      lucide.createIcons();
+
+      // Formatted output text string (Name:ID)
+      output.value = selectedMods.map(m => `${m.title}:${m.id}`).join('\n');
     }
 
-    // Direct ZIP Download from Build & Export Tab
-    async function downloadExportPackZip() {
+    // Copy Output String
+    function copyShareCode() {
+      const output = document.getElementById('export-code-output');
+      if (!output.value) return;
+      output.select();
+      navigator.clipboard.writeText(output.value);
+      alert('Share code copied to clipboard!');
+    }
+
+    // Save as .TXT File
+    function saveAsTextFile() {
+      const code = document.getElementById('export-code-output').value;
+      if (!code) return;
+
+      const blob = new Blob([code], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'modpack-list.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Directly Download ZIP from Build Tab
+    async function downloadDirectFromBuild() {
       if (selectedMods.length === 0) {
-        showToast('Add mods to your list before downloading', 'error');
+        alert('Please add mods to your pack first!');
         return;
       }
+      document.getElementById('import-input').value = document.getElementById('export-code-output').value;
+      document.getElementById('import-loader').value = document.getElementById('export-loader').value;
+      document.getElementById('import-version-select').value = document.getElementById('export-version').value;
 
-      const loader = document.getElementById('export-loader').value;
-      const targetVer = document.getElementById('export-version').value;
-      const zipBtn = document.getElementById('export-zip-btn');
-      
-      const originalText = zipBtn.innerHTML;
-      zipBtn.disabled = true;
-      zipBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Fetching...`;
-      lucide.createIcons();
-
-      try {
-        const zip = new JSZip();
-        let fetchedCount = 0;
-
-        for (const mod of selectedMods) {
-          try {
-            const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(mod.id)}/version?game_versions=[%22${encodeURIComponent(targetVer)}%22]&loaders=[%22${encodeURIComponent(loader)}%22]`;
-            const res = await fetch(url);
-            if (!res.ok) continue;
-
-            const versions = await res.json();
-            if (versions && versions.length > 0) {
-              const primaryFile = versions[0].files.find(f => f.primary) || versions[0].files[0];
-              const fileRes = await fetch(primaryFile.url);
-              const blob = await fileRes.blob();
-              zip.file(primaryFile.filename, blob);
-              fetchedCount++;
-            }
-          } catch(e) {
-            console.warn(`Could not fetch ${mod.title}`, e);
-          }
-        }
-
-        if (fetchedCount === 0) {
-          showToast(`No compatible files found for ${loader} on MC ${targetVer}`, 'error');
-          return;
-        }
-
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        saveAs(zipBlob, `modpack-${targetVer}-${loader}.zip`);
-        showToast(`Downloaded ${fetchedCount} mod(s) in ZIP archive!`, 'success');
-
-      } catch (err) {
-        console.error(err);
-        showToast('Error building download archive', 'error');
-      } finally {
-        zipBtn.disabled = false;
-        zipBtn.innerHTML = originalText;
-        lucide.createIcons();
-      }
+      switchTab('import');
+      await processImportAndResolve();
     }
 
-    // Export .TXT File
-    function downloadCodeFile() {
-      if (selectedMods.length === 0) {
-        showToast('Add mods before saving a pack file', 'error');
-        return;
-      }
-
-      const loader = document.getElementById('export-loader').value;
-      const targetVer = document.getElementById('export-version').value;
-      const codeString = buildPackCodeString(loader, targetVer);
-
-      const blob = new Blob([codeString], { type: "text/plain;charset=utf-8" });
-      saveAs(blob, `modpack-${targetVer}.txt`);
-      showToast('Pack .txt file saved!', 'success');
-    }
-
-    // Generate Shareable Code String Format
-    function buildPackCodeString(loader, targetVer) {
-      const modItems = selectedMods.map(m => `${m.title.replace(/[:|;]/g, '')}:${m.id}`).join(';');
-      return `MCPACK|${loader}|${targetVer}|${modItems}`;
-    }
-
-    function generateExportCode() {
-      if (selectedMods.length === 0) {
-        showToast('Add at least one mod before generating a code', 'error');
-        return;
-      }
-
-      const loader = document.getElementById('export-loader').value;
-      const targetVer = document.getElementById('export-version').value;
-      const codeString = buildPackCodeString(loader, targetVer);
-
-      const outputBox = document.getElementById('export-code-output');
-      const textArea = document.getElementById('export-code-text');
-
-      textArea.value = codeString;
-      outputBox.classList.remove('hidden');
-      showToast('Export code generated!', 'success');
-    }
-
-    function copyExportCode() {
-      const textArea = document.getElementById('export-code-text');
-      textArea.select();
-      document.execCommand('copy');
-      showToast('Copied code to clipboard!', 'success');
-    }
-
-    // --- TAB 2 LOGIC: IMPORT & DOWNLOAD ---
-
-    function handleFileUpload(event) {
-      const file = event.target.files[0];
+    // Read Uploaded .TXT File
+    function handleFileUpload(evt) {
+      const file = evt.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        document.getElementById('import-code-input').value = e.target.result.trim();
-        showToast(`Loaded ${file.name}`, 'success');
+        document.getElementById('import-input').value = e.target.result;
       };
       reader.readAsText(file);
     }
 
-    async function fetchImportedMods() {
-      const codeInput = document.getElementById('import-code-input').value.trim();
-      const targetVer = document.getElementById('import-version-select').value;
+    // Resolve Version and Fetch Direct Download Links from API
+    async function processImportAndResolve() {
+      const rawInput = document.getElementById('import-input').value.trim();
       const loader = document.getElementById('import-loader').value;
+      const targetVersion = document.getElementById('import-version-select').value;
+      const resolvedList = document.getElementById('resolved-list');
+      const zipBtn = document.getElementById('zip-all-btn');
 
-      if (!codeInput) {
-        showToast('Please paste a code or upload a pack file', 'error');
+      if (!rawInput) {
+        alert('Please paste or upload a share code first.');
         return;
       }
 
-      // Parse Code Input
-      let parsedMods = []; // Array of { id, name }
+      resolvedList.innerHTML = `<p class="text-xs text-gray-400 text-center py-6">Resolving files for ${targetVersion} (${loader})...</p>`;
+      resolvedDownloads = [];
+      zipBtn.disabled = true;
 
-      if (codeInput.startsWith('MCPACK|')) {
-        // Standard generated format
-        const parts = codeInput.split('|');
-        if (parts.length >= 4) {
-          const modStr = parts[3];
-          parsedMods = modStr.split(';').map(item => {
-            const [name, id] = item.split(':');
-            return { id: id || name, name: name || id };
-          }).filter(m => m.id);
-        }
-      } else {
-        // Fallback: Line-separated or comma-separated format (name|id or json)
-        try {
-          const json = JSON.parse(codeInput);
-          if (Array.isArray(json)) {
-            parsedMods = json.map(item => typeof item === 'string' ? { id: item, name: item } : { id: item.id || item.slug, name: item.name || item.id });
-          }
-        } catch(e) {
-          // Plain text comma/newline separation
-          const lines = codeInput.split(/[\n,;]+/);
-          parsedMods = lines.map(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return null;
-            if (trimmed.includes('|')) {
-              const [name, id] = trimmed.split('|');
-              return { id: id.trim(), name: name.trim() };
-            }
-            return { id: trimmed, name: trimmed };
-          }).filter(Boolean);
-        }
-      }
+      // Parse lines (Formats: "Name:ID", "ID", or space/comma separated)
+      const lines = rawInput.split('\n').map(l => l.trim()).filter(Boolean);
+      const modIds = [];
 
-      if (parsedMods.length === 0) {
-        showToast('Could not parse any mod identifiers from input', 'error');
-        return;
-      }
-
-      const resultsContainer = document.getElementById('import-results-container');
-      const listContainer = document.getElementById('import-resolved-list');
-
-      resultsContainer.classList.remove('hidden');
-      listContainer.innerHTML = `
-        <div class="text-center py-12 text-modrinth-muted text-sm">
-          <div class="inline-block animate-spin mb-2 text-modrinth"><i data-lucide="loader-2" class="w-8 h-8"></i></div>
-          <p class="font-semibold">Resolving target version downloads from Modrinth REST API...</p>
-        </div>
-      `;
-      lucide.createIcons();
-
-      importResolvedData = [];
-      let foundCount = 0;
-      let missingCount = 0;
-
-      // Query Modrinth API for each mod's versions
-      for (const mod of parsedMods) {
-        try {
-          // Fetch version list for project ID or slug
-          const url = `https://api.modrinth.com/v2/project/${encodeURIComponent(mod.id)}/version?game_versions=[%22${encodeURIComponent(targetVer)}%22]&loaders=[%22${encodeURIComponent(loader)}%22]`;
-          const res = await fetch(url);
-
-          if (!res.ok) throw new Error('Not found');
-
-          const versions = await res.json();
-
-          if (versions && versions.length > 0) {
-            // Pick the latest matching version file
-            const latestVer = versions[0];
-            const primaryFile = latestVer.files.find(f => f.primary) || latestVer.files[0];
-
-            importResolvedData.push({
-              id: mod.id,
-              name: mod.name,
-              status: 'found',
-              versionNumber: latestVer.version_number,
-              fileName: primaryFile.filename,
-              downloadUrl: primaryFile.url,
-              fileSize: (primaryFile.size / (1024 * 1024)).toFixed(2) + ' MB'
-            });
-            foundCount++;
-          } else {
-            importResolvedData.push({
-              id: mod.id,
-              name: mod.name,
-              status: 'missing',
-              reason: `No compatible ${loader} release found for MC ${targetVer}`
-            });
-            missingCount++;
-          }
-        } catch (err) {
-          importResolvedData.push({
-            id: mod.id,
-            name: mod.name,
-            status: 'missing',
-            reason: `Project not found or API error`
-          });
-          missingCount++;
-        }
-      }
-
-      // Render Statistics
-      document.getElementById('stat-total').textContent = parsedMods.length;
-      document.getElementById('stat-found').textContent = foundCount;
-      document.getElementById('stat-missing').textContent = missingCount;
-
-      // Render List Results
-      listContainer.innerHTML = importResolvedData.map(item => {
-        if (item.status === 'found') {
-          return `
-            <div class="flex items-center justify-between p-3 bg-modrinth-dark/80 rounded-xl border border-emerald-500/20 hover:border-emerald-500/40 transition">
-              <div class="flex items-center space-x-3 truncate">
-                <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                  <i data-lucide="check" class="w-4 h-4"></i>
-                </div>
-                <div class="truncate">
-                  <div class="font-bold text-sm truncate flex items-center gap-2">
-                    ${item.name}
-                    <span class="text-[10px] text-modrinth-muted font-normal bg-modrinth-card px-1.5 py-0.5 rounded border border-modrinth-border">${item.versionNumber}</span>
-                  </div>
-                  <div class="text-xs text-modrinth-muted font-mono truncate">${item.fileName} (${item.fileSize})</div>
-                </div>
-              </div>
-              <a href="${item.downloadUrl}" target="_blank" download class="ml-3 shrink-0 bg-modrinth hover:bg-modrinth-hover text-black font-semibold text-xs px-3.5 py-2 rounded-lg transition flex items-center gap-1.5">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span>Download</span>
-              </a>
-            </div>
-          `;
+      lines.forEach(line => {
+        if (line.includes(':')) {
+          const parts = line.split(':');
+          modIds.push(parts[parts.length - 1].trim());
         } else {
-          return `
-            <div class="flex items-center justify-between p-3 bg-modrinth-dark/40 rounded-xl border border-rose-500/20 opacity-75">
-              <div class="flex items-center space-x-3 truncate">
-                <div class="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-                  <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+          modIds.push(line);
+        }
+      });
+
+      let itemsHtml = '';
+
+      for (const id of modIds) {
+        try {
+          const versionData = await resolveModVersion(id, loader, targetVersion);
+          
+          if (versionData && versionData.files && versionData.files.length > 0) {
+            const primaryFile = versionData.files.find(f => f.primary) || versionData.files[0];
+            resolvedDownloads.push({
+              filename: primaryFile.filename,
+              url: primaryFile.url
+            });
+
+            itemsHtml += `
+              <div class="bg-gray-950 p-3 border border-gray-800 rounded-lg flex items-center justify-between">
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-200">${primaryFile.filename}</h4>
+                  <p class="text-[10px] text-emerald-400">Compatible version found</p>
                 </div>
-                <div class="truncate">
-                  <div class="font-bold text-sm text-slate-300 truncate">${item.name}</div>
-                  <div class="text-xs text-rose-400 truncate">${item.reason}</div>
+                <a href="${primaryFile.url}" download class="bg-gray-800 hover:bg-gray-700 text-xs px-3 py-1.5 rounded text-gray-200 flex items-center space-x-1">
+                  <i data-lucide="download" class="w-3 h-3"></i>
+                  <span>JAR</span>
+                </a>
+              </div>
+            `;
+          } else {
+            itemsHtml += `
+              <div class="bg-gray-950 p-3 border border-red-900/30 rounded-lg flex items-center justify-between">
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-400">ID: ${id}</h4>
+                  <p class="text-[10px] text-red-400">Not compatible with ${targetVersion} (${loader})</p>
                 </div>
               </div>
-              <span class="text-xs text-modrinth-muted bg-modrinth-card px-2.5 py-1 rounded-lg border border-modrinth-border shrink-0">Unavailable</span>
+            `;
+          }
+        } catch (e) {
+          itemsHtml += `
+            <div class="bg-gray-950 p-3 border border-red-900/30 rounded-lg flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-semibold text-gray-400">ID: ${id}</h4>
+                <p class="text-[10px] text-red-400">Failed to fetch project details</p>
+              </div>
             </div>
           `;
         }
-      }).join('');
+      }
 
+      resolvedList.innerHTML = itemsHtml;
       lucide.createIcons();
-      showToast(`Resolved ${foundCount} of ${parsedMods.length} mods for MC ${targetVer}!`, 'success');
+
+      if (resolvedDownloads.length > 0) {
+        zipBtn.disabled = false;
+      }
     }
 
-    // Download resolved mods directly into a single zip archive
+    // Query Modrinth Version Endpoint
+    async function resolveModVersion(projectId, loader, gameVersion) {
+      let url = `https://api.modrinth.com/v2/project/${projectId}/version`;
+      const params = [];
+      if (loader && loader !== 'any') params.push(`loaders=["${loader}"]`);
+      if (gameVersion && gameVersion !== 'any') params.push(`game_versions=["${gameVersion}"]`);
+
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+
+      const res = await fetch(url, { headers: API_HEADERS });
+      if (!res.ok) return null;
+      const versions = await res.json();
+      return versions && versions.length > 0 ? versions[0] : null;
+    }
+
+    // Batch Download All Resolved Files as ZIP
     async function downloadAllAsZip() {
-      const readyMods = importResolvedData.filter(m => m.status === 'found');
-      if (readyMods.length === 0) {
-        showToast('No downloadable mods found for this version', 'error');
-        return;
-      }
+      if (resolvedDownloads.length === 0) return;
 
-      const zipBtn = document.getElementById('download-zip-btn');
-      const originalBtnText = zipBtn.innerHTML;
+      const zip = new JSZip();
+      const zipBtn = document.getElementById('zip-all-btn');
       zipBtn.disabled = true;
-      zipBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Zipping...`;
-      lucide.createIcons();
+      zipBtn.innerHTML = `<span>Creating ZIP...</span>`;
 
-      try {
-        const zip = new JSZip();
-        const targetVer = document.getElementById('import-version-select').value || 'mods';
-
-        showToast(`Preparing ${readyMods.length} mod files for ZIP download...`, 'info');
-
-        for (let i = 0; i < readyMods.length; i++) {
-          const mod = readyMods[i];
-          const response = await fetch(mod.downloadUrl);
-          const blob = await response.blob();
-          zip.file(mod.fileName, blob);
+      for (const item of resolvedDownloads) {
+        try {
+          const res = await fetch(item.url);
+          const blob = await res.blob();
+          zip.file(item.filename, blob);
+        } catch (e) {
+          console.error('Failed to add file to zip:', item.filename, e);
         }
-
-        const content = await zip.generateAsync({ type: 'blob' });
-        saveAs(content, `modpack-${targetVer}.zip`);
-        showToast('ZIP Download started!', 'success');
-
-      } catch (err) {
-        console.error(err);
-        showToast('Failed to generate ZIP file', 'error');
-      } finally {
-        zipBtn.disabled = false;
-        zipBtn.innerHTML = originalBtnText;
-        lucide.createIcons();
       }
+
+      zip.generateAsync({ type: 'blob' }).then(function(content) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(content);
+        a.download = 'mods.zip';
+        a.click();
+
+        zipBtn.disabled = false;
+        zipBtn.innerHTML = `<i data-lucide="archive" class="w-4 h-4"></i><span>Download All (.ZIP)</span>`;
+        lucide.createIcons();
+      });
     }
   </script>
 </body>
