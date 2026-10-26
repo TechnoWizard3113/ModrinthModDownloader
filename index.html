@@ -317,6 +317,9 @@
 
     // Fallback static list covering release 1.0 to recent snapshots
     const DEFAULT_MC_VERSIONS = [
+      "26.3"
+      "26.2", "26.2.1"
+      "26.1", "26.1.1", "26.1.2"
       "1.21.4", "1.21.3", "1.21.1", "1.21", 
       "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.20",
       "1.19.4", "1.19.3", "1.19.2", "1.19.1", "1.19",
@@ -370,9 +373,9 @@
       importSelect.innerHTML = optionsHtml;
 
       // Default selection
-      if (mcVersionsList.includes('1.20.4')) {
-        exportSelect.value = '1.20.4';
-        importSelect.value = '1.20.4';
+      if (mcVersionsList.includes('26.3')) {
+        exportSelect.value = '26.3';
+        importSelect.value = '26.3';
       }
     }
 
